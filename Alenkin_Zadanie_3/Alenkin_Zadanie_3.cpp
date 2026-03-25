@@ -54,6 +54,7 @@ int main() {
         SetColor(7);
         std::wcout << L"1. Добавить новый файл\n";
         std::wcout << L"2. Пинг сервера (Проверка связи)\n";
+        std::wcout << L"3. Показать список файлов (Постранично)\n";
         std::wcout << L"9. Выход\n";
 
         choice = GetIntInput(L"Выберите действие: ");
@@ -85,6 +86,9 @@ int main() {
         }
         case 2:
             db.Ping();
+            break;
+        case 3:
+            resManager.ShowResourcesPaged(); 
             break;
         case 9:
             std::wcout << L"Выход из программы...\n";
