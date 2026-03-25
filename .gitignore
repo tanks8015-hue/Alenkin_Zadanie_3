@@ -1,0 +1,26 @@
+# Временные файлы и настройки пользователя Visual Studio
+.vs/
+*.user
+*.suo
+*.db
+*.opendb
+*.VC.db
+
+# Папки с результатами сборки
+Debug/
+Release/
+x64/
+x86/
+bld/
+bin/
+obj/
+
+# Скомпилированные бинарники и логи
+*.exe
+*.dll
+*.obj
+*.pdb
+*.ilk
+*.tlog
+*.log
+*.idb
