@@ -4,6 +4,22 @@ ResourceManager::ResourceManager(SQLHDBC connectionHandle) {
     hDbc = connectionHandle;
 }
 
+// НОВОЕ: Реализация функции логирования
+void ResourceManager::LogAction(const std::wstring& actionDescription) {
+    SQLHSTMT hStmt;
+    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+
+    // SQL-запрос для добавления лога (Дата ActionDate ставится сама через GETDATE() в БД)
+    std::wstring query = L"INSERT INTO Logs (ActionDescription) VALUES (?)";
+    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
+
+    // Биндим текст лога
+    SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, 500, 0, (SQLPOINTER)actionDescription.c_str(), actionDescription.length() * sizeof(wchar_t), NULL);
+
+    SQLExecute(hStmt); // Выполняем тихо, без вывода в консоль, чтобы не спамить
+    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+}
+
 bool ResourceManager::IsValidName(const std::wstring& name) {
     std::wregex illegalChars(L"[\\\\/:\\*]");
     if (std::regex_search(name, illegalChars)) {
@@ -28,14 +44,11 @@ bool ResourceManager::IsValidExtension(const std::wstring& name) {
 bool ResourceManager::IsDuplicate(const std::wstring& name) {
     SQLHSTMT hStmt;
     SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
-
     std::wstring query = L"SELECT COUNT(*) FROM Resources WHERE Name = ?";
     SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
     SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, 255, 0, (SQLPOINTER)name.c_str(), name.length() * sizeof(wchar_t), NULL);
-
     SQLRETURN retcode = SQLExecute(hStmt);
     bool isDup = false;
-
     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
         SQLINTEGER count = 0;
         SQLLEN cbCount = 0;
@@ -60,11 +73,9 @@ void ResourceManager::ShowResourcesPaged() {
     int offset = 0;
     int fetchSize = 10;
     bool keepPaging = true;
-
     while (keepPaging) {
         SQLHSTMT hStmt;
         SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
-
         std::wstring query =
             L"SELECT r.ResourceID, r.Name, r.Size, u.UserName "
             L"FROM Resources r "
@@ -72,70 +83,93 @@ void ResourceManager::ShowResourcesPaged() {
             L"WHERE r.isDeleted = 0 "
             L"ORDER BY r.ResourceID "
             L"OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
-
         SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
         SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &offset, 0, NULL);
         SQLBindParameter(hStmt, 2, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &fetchSize, 0, NULL);
-
         SQLRETURN retcode = SQLExecute(hStmt);
 
         if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
             std::wcout << L"\n--- Страница файлов (Смещение: " << offset << L") ---\n";
-            std::wcout << std::left << std::setw(5) << L"ID"
-                << std::setw(22) << L"Имя файла"
-                << std::setw(10) << L"Размер"
-                << std::setw(22) << L"Владелец" << L"\n";
+            std::wcout << std::left << std::setw(5) << L"ID" << std::setw(22) << L"Имя файла" << std::setw(10) << L"Размер" << std::setw(22) << L"Владелец" << L"\n";
             std::wcout << L"------------------------------------------------------------\n";
-
             SQLINTEGER id, size;
             SQLWCHAR name[256], owner[256];
             SQLLEN cbId, cbName, cbSize, cbOwner;
-
             SQLBindCol(hStmt, 1, SQL_C_SLONG, &id, sizeof(id), &cbId);
             SQLBindCol(hStmt, 2, SQL_C_WCHAR, name, sizeof(name), &cbName);
             SQLBindCol(hStmt, 3, SQL_C_SLONG, &size, sizeof(size), &cbSize);
             SQLBindCol(hStmt, 4, SQL_C_WCHAR, owner, sizeof(owner), &cbOwner);
-
             int rowCount = 0;
             while (SQLFetch(hStmt) == SQL_SUCCESS) {
                 rowCount++;
-                std::wstring truncatedName = TruncateString(name, 15);
-                std::wstring truncatedOwner = TruncateString(owner, 15);
-
-                std::wcout << std::left << std::setw(5) << id
-                    << std::setw(22) << truncatedName
-                    << std::setw(10) << size
-                    << std::setw(22) << truncatedOwner << L"\n";
+                std::wcout << std::left << std::setw(5) << id << std::setw(22) << TruncateString(name, 15) << std::setw(10) << size << std::setw(22) << TruncateString(owner, 15) << L"\n";
             }
-
-            if (rowCount == 0 && offset > 0) {
-                std::wcout << L"[ИНФО] Дальше записей нет.\n";
-                offset -= fetchSize;
-            }
-            else if (rowCount == 0 && offset == 0) {
-                std::wcout << L"[ИНФО] База данных пока пуста.\n";
-            }
+            if (rowCount == 0 && offset > 0) { std::wcout << L"[ИНФО] Дальше записей нет.\n"; offset -= fetchSize; }
+            else if (rowCount == 0 && offset == 0) { std::wcout << L"[ИНФО] База данных пока пуста.\n"; }
         }
-        else {
-            std::wcerr << L"[ОШИБКА SQL] Не удалось загрузить список файлов.\n";
-        }
+        else { std::wcerr << L"[ОШИБКА SQL] Не удалось загрузить список файлов.\n"; }
         SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
         std::wcout << L"\n[Д]алее | [Н]азад | [В]ыход в главное меню: ";
         wchar_t choice;
         std::wcin >> choice;
         std::wcin.ignore((std::numeric_limits<std::streamsize>::max)(), L'\n');
-
-        if (choice == L'Д' || choice == L'д' || choice == L'D' || choice == L'd') {
-            offset += fetchSize;
-        }
+        if (choice == L'Д' || choice == L'д' || choice == L'D' || choice == L'd') { offset += fetchSize; }
         else if (choice == L'Н' || choice == L'н' || choice == L'N' || choice == L'n') {
-            if (offset >= fetchSize) offset -= fetchSize;
-            else std::wcout << L"[ИНФО] Вы находитесь на первой странице!\n";
+            if (offset >= fetchSize) offset -= fetchSize; else std::wcout << L"[ИНФО] Вы находитесь на первой странице!\n";
         }
-        else if (choice == L'В' || choice == L'в' || choice == L'Q' || choice == L'q') {
-            keepPaging = false;
+        else if (choice == L'В' || choice == L'в' || choice == L'Q' || choice == L'q') { keepPaging = false; }
+    }
+}
+
+void ResourceManager::ShowStatistics() {
+    SQLHSTMT hStmt;
+    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+    std::wstring query = L"SELECT COUNT(ResourceID), SUM(Size) FROM Resources WHERE isDeleted = 0";
+    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
+    SQLRETURN retcode = SQLExecute(hStmt);
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        SQLINTEGER count = 0; SQLBIGINT totalSize = 0; SQLLEN cbCount, cbSize;
+        SQLBindCol(hStmt, 1, SQL_C_SLONG, &count, sizeof(count), &cbCount);
+        SQLBindCol(hStmt, 2, SQL_C_SBIGINT, &totalSize, sizeof(totalSize), &cbSize);
+        if (SQLFetch(hStmt) == SQL_SUCCESS) {
+            std::wcout << L"\n==============================\n";
+            std::wcout << L"   СТАТИСТИКА БАЗЫ ДАННЫХ\n";
+            std::wcout << L"==============================\n";
+            std::wcout << L"Всего файлов: " << count << L"\n";
+            if (cbSize != SQL_NULL_DATA) std::wcout << L"Общий объем:  " << totalSize << L" байт\n";
+            else std::wcout << L"Общий объем:  0 байт\n";
+            std::wcout << L"==============================\n";
         }
     }
+    else { std::wcerr << L"[ОШИБКА SQL] Не удалось получить статистику.\n"; }
+    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+}
+
+void ResourceManager::SearchByName(const std::wstring& keyword) {
+    SQLHSTMT hStmt;
+    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+    std::wstring query = L"SELECT ResourceID, Name, Size FROM Resources WHERE Name LIKE ? AND isDeleted = 0";
+    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
+    std::wstring mask = L"%" + keyword + L"%";
+    SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, 255, 0, (SQLPOINTER)mask.c_str(), mask.length() * sizeof(wchar_t), NULL);
+    SQLRETURN retcode = SQLExecute(hStmt);
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        std::wcout << L"\n--- Результаты поиска по запросу '" << keyword << L"' ---\n";
+        std::wcout << std::left << std::setw(5) << L"ID" << std::setw(25) << L"Имя файла" << std::setw(10) << L"Размер" << L"\n";
+        std::wcout << L"----------------------------------------\n";
+        SQLINTEGER id, size; SQLWCHAR name[256]; SQLLEN cbId, cbName, cbSize;
+        SQLBindCol(hStmt, 1, SQL_C_SLONG, &id, sizeof(id), &cbId);
+        SQLBindCol(hStmt, 2, SQL_C_WCHAR, name, sizeof(name), &cbName);
+        SQLBindCol(hStmt, 3, SQL_C_SLONG, &size, sizeof(size), &cbSize);
+        int rowCount = 0;
+        while (SQLFetch(hStmt) == SQL_SUCCESS) {
+            rowCount++;
+            std::wcout << std::left << std::setw(5) << id << std::setw(25) << TruncateString(name, 20) << std::setw(10) << size << L"\n";
+        }
+        if (rowCount == 0) std::wcout << L"[ИНФО] Файлы не найдены.\n";
+    }
+    else { std::wcerr << L"[ОШИБКА SQL] Ошибка при выполнении поиска.\n"; }
+    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
 }
 
 bool ResourceManager::AddResource(const std::wstring& name, SQLINTEGER size, SQLINTEGER categoryId, SQLINTEGER ownerId) {
@@ -154,6 +188,8 @@ bool ResourceManager::AddResource(const std::wstring& name, SQLINTEGER size, SQL
 
     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
         std::wcout << L"[УСПЕХ] Файл добавлен в базу!\n";
+        // НОВОЕ: Записываем действие в лог
+        LogAction(L"Добавлен новый файл: " + name);
         SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
         return true;
     }
@@ -163,137 +199,51 @@ bool ResourceManager::AddResource(const std::wstring& name, SQLINTEGER size, SQL
         return false;
     }
 }
-void ResourceManager::ShowStatistics() {
-    SQLHSTMT hStmt;
-    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
-    std::wstring query = L"SELECT COUNT(ResourceID), SUM(Size) FROM Resources WHERE isDeleted = 0";
-    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
 
-    SQLRETURN retcode = SQLExecute(hStmt);
-
-    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
-        SQLINTEGER count = 0;
-        SQLBIGINT totalSize = 0;
-        SQLLEN cbCount, cbSize;
-
-        // Биндим результаты колонок к переменным
-        SQLBindCol(hStmt, 1, SQL_C_SLONG, &count, sizeof(count), &cbCount);
-        SQLBindCol(hStmt, 2, SQL_C_SBIGINT, &totalSize, sizeof(totalSize), &cbSize);
-
-        if (SQLFetch(hStmt) == SQL_SUCCESS) {
-            std::wcout << L"\n==============================\n";
-            std::wcout << L"   СТАТИСТИКА БАЗЫ ДАННЫХ\n";
-            std::wcout << L"==============================\n";
-            std::wcout << L"Всего файлов: " << count << L"\n";
-
-            if (cbSize != SQL_NULL_DATA) {
-                std::wcout << L"Общий объем:  " << totalSize << L" байт\n";
-            }
-            else {
-                std::wcout << L"Общий объем:  0 байт\n";
-            }
-            std::wcout << L"==============================\n";
-        }
-    }
-    else {
-        std::wcerr << L"[ОШИБКА SQL] Не удалось получить статистику.\n";
-    }
-    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
-}
-void ResourceManager::SearchByName(const std::wstring& keyword) {
-    SQLHSTMT hStmt;
-    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
-
-    std::wstring query = L"SELECT ResourceID, Name, Size FROM Resources WHERE Name LIKE ? AND isDeleted = 0";
-    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
-    std::wstring mask = L"%" + keyword + L"%";
-    SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, 255, 0, (SQLPOINTER)mask.c_str(), mask.length() * sizeof(wchar_t), NULL);
-
-    SQLRETURN retcode = SQLExecute(hStmt);
-
-    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
-        std::wcout << L"\n--- Результаты поиска по запросу '" << keyword << L"' ---\n";
-        std::wcout << std::left << std::setw(5) << L"ID"
-            << std::setw(25) << L"Имя файла"
-            << std::setw(10) << L"Размер" << L"\n";
-        std::wcout << L"----------------------------------------\n";
-
-        SQLINTEGER id, size;
-        SQLWCHAR name[256];
-        SQLLEN cbId, cbName, cbSize;
-
-        SQLBindCol(hStmt, 1, SQL_C_SLONG, &id, sizeof(id), &cbId);
-        SQLBindCol(hStmt, 2, SQL_C_WCHAR, name, sizeof(name), &cbName);
-        SQLBindCol(hStmt, 3, SQL_C_SLONG, &size, sizeof(size), &cbSize);
-
-        int rowCount = 0;
-        while (SQLFetch(hStmt) == SQL_SUCCESS) {
-            rowCount++;
-            std::wcout << std::left << std::setw(5) << id
-                << std::setw(25) << TruncateString(name, 20)
-                << std::setw(10) << size << L"\n";
-        }
-        if (rowCount == 0) {
-            std::wcout << L"[ИНФО] Файлы не найдены.\n";
-        }
-    }
-    else {
-        std::wcerr << L"[ОШИБКА SQL] Ошибка при выполнении поиска.\n";
-    }
-    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
-}
-// НОВОЕ: Удаление в корзину (Группа А - Soft Delete)
 bool ResourceManager::DeleteToTrash(SQLINTEGER resourceId) {
     SQLHSTMT hStmt;
     SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
-
-    // Меняем флаг isDeleted на 1
     std::wstring query = L"UPDATE Resources SET isDeleted = 1 WHERE ResourceID = ?";
     SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
     SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &resourceId, 0, NULL);
-
     SQLRETURN retcode = SQLExecute(hStmt);
     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
         SQLLEN rowCount = 0;
-        SQLRowCount(hStmt, &rowCount); // Проверяем, сколько строк было изменено
+        SQLRowCount(hStmt, &rowCount);
         if (rowCount > 0) {
-            std::wcout << L"[УСПЕХ] Файл с ID " << resourceId << L" перемещен в корзину (Soft Delete)!\n";
+            std::wcout << L"[УСПЕХ] Файл перемещен в корзину!\n";
+            // НОВОЕ: Записываем действие в лог
+            LogAction(L"Удален в корзину файл с ID: " + std::to_wstring(resourceId));
             SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
             return true;
         }
-        else {
-            std::wcerr << L"[ОШИБКА] Файл с таким ID не найден.\n";
-        }
+        else { std::wcerr << L"[ОШИБКА] Файл с таким ID не найден.\n"; }
     }
-    else {
-        std::wcerr << L"[ОШИБКА SQL] Не удалось удалить файл.\n";
-    }
+    else { std::wcerr << L"[ОШИБКА SQL] Не удалось удалить файл.\n"; }
     SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
     return false;
 }
+
 bool ResourceManager::RestoreFromTrash(SQLINTEGER resourceId) {
     SQLHSTMT hStmt;
     SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
     std::wstring query = L"UPDATE Resources SET isDeleted = 0 WHERE ResourceID = ?";
     SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
     SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &resourceId, 0, NULL);
-
     SQLRETURN retcode = SQLExecute(hStmt);
     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
         SQLLEN rowCount = 0;
         SQLRowCount(hStmt, &rowCount);
         if (rowCount > 0) {
-            std::wcout << L"[УСПЕХ] Файл с ID " << resourceId << L" успешно восстановлен из корзины!\n";
+            std::wcout << L"[УСПЕХ] Файл успешно восстановлен из корзины!\n";
+            // НОВОЕ: Записываем действие в лог
+            LogAction(L"Восстановлен из корзины файл с ID: " + std::to_wstring(resourceId));
             SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
             return true;
         }
-        else {
-            std::wcerr << L"[ОШИБКА] Файл с таким ID не найден.\n";
-        }
+        else { std::wcerr << L"[ОШИБКА] Файл с таким ID не найден.\n"; }
     }
-    else {
-        std::wcerr << L"[ОШИБКА SQL] Не удалось восстановить файл.\n";
-    }
+    else { std::wcerr << L"[ОШИБКА SQL] Не удалось восстановить файл.\n"; }
     SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
     return false;
 }

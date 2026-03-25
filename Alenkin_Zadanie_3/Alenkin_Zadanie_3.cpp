@@ -18,11 +18,11 @@ int GetIntInput(const std::wstring& prompt) {
             return value;
         }
         else {
-            SetColor(4); // 4 = Красный цвет для ошибок
+            SetColor(4);
             std::wcout << L"[ОШИБКА] Введено не число! Пожалуйста, повторите ввод.\n";
-            SetColor(7); // 7 = Стандартный белый цвет
+            SetColor(7); 
 
-            std::wcin.clear(); // Сбрасываем флаг ошибки потока
+            std::wcin.clear(); 
             std::wcin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n'); // Очищаем мусор из буфера
         }
     }
@@ -118,7 +118,7 @@ int main() {
             std::wcout << L"Выход из программы...\n";
             break;
         default:
-            SetColor(4); // Красный
+            SetColor(4); 
             std::wcout << L"Неверный пункт меню!\n";
             SetColor(7);
             break;

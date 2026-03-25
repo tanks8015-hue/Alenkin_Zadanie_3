@@ -4,7 +4,7 @@
 #include <string>
 #include <iostream>
 #include <regex>
-#include <iomanip> 
+#include <iomanip>
 
 class ResourceManager {
 private:
@@ -14,6 +14,7 @@ private:
     bool IsValidExtension(const std::wstring& name);
     bool IsDuplicate(const std::wstring& name);
     std::wstring TruncateString(const std::wstring& str, size_t maxLength);
+    void LogAction(const std::wstring& actionDescription);
 
 public:
     ResourceManager(SQLHDBC connectionHandle);
