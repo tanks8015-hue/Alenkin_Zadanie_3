@@ -57,6 +57,8 @@ int main() {
         std::wcout << L"3. Показать список файлов (Постранично)\n";
         std::wcout << L"4. Статистика базы данных (COUNT/SUM)\n";
         std::wcout << L"5. Поиск файла по имени (LIKE)\n";
+        std::wcout << L"6. Удалить файл в корзину (Soft Delete)\n";
+        std::wcout << L"7. Восстановить файл из корзины\n";
         std::wcout << L"9. Выход\n";
 
         choice = GetIntInput(L"Выберите действие: ");
@@ -71,16 +73,16 @@ int main() {
             int catId = GetIntInput(L"Введите ID категории (например, 1): ");
             int ownerId = GetIntInput(L"Введите ID владельца (например, 1): ");
 
-            SetColor(14); // Желтый
+            SetColor(14);
             std::wcout << L"Добавление в базу...\n";
             SetColor(7);
 
             if (resManager.AddResource(name, size, catId, ownerId)) {
-                SetColor(10); // Зеленый
+                SetColor(10);
                 std::wcout << L"Операция успешно завершена!\n";
             }
             else {
-                SetColor(4); // Красный
+                SetColor(4);
                 std::wcout << L"Операция прервана из-за ошибки.\n";
             }
             SetColor(7);
@@ -100,6 +102,16 @@ int main() {
             std::wcout << L"Введите часть имени для поиска: ";
             std::getline(std::wcin, searchWord);
             resManager.SearchByName(searchWord);
+            break;
+        }
+        case 6: {
+            int delId = GetIntInput(L"Введите ID файла для перемещения в корзину: ");
+            resManager.DeleteToTrash(delId);
+            break;
+        }
+        case 7: {
+            int resId = GetIntInput(L"Введите ID файла для восстановления: ");
+            resManager.RestoreFromTrash(resId);
             break;
         }
         case 9:

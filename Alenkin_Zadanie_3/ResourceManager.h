@@ -21,4 +21,6 @@ public:
     void ShowResourcesPaged();
     void ShowStatistics();
     void SearchByName(const std::wstring& keyword);
+    bool DeleteToTrash(SQLINTEGER resourceId);
+    bool RestoreFromTrash(SQLINTEGER resourceId);
 };

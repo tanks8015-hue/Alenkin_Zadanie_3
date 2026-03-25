@@ -242,3 +242,58 @@ void ResourceManager::SearchByName(const std::wstring& keyword) {
     }
     SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
 }
+// НОВОЕ: Удаление в корзину (Группа А - Soft Delete)
+bool ResourceManager::DeleteToTrash(SQLINTEGER resourceId) {
+    SQLHSTMT hStmt;
+    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+
+    // Меняем флаг isDeleted на 1
+    std::wstring query = L"UPDATE Resources SET isDeleted = 1 WHERE ResourceID = ?";
+    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
+    SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &resourceId, 0, NULL);
+
+    SQLRETURN retcode = SQLExecute(hStmt);
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        SQLLEN rowCount = 0;
+        SQLRowCount(hStmt, &rowCount); // Проверяем, сколько строк было изменено
+        if (rowCount > 0) {
+            std::wcout << L"[УСПЕХ] Файл с ID " << resourceId << L" перемещен в корзину (Soft Delete)!\n";
+            SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+            return true;
+        }
+        else {
+            std::wcerr << L"[ОШИБКА] Файл с таким ID не найден.\n";
+        }
+    }
+    else {
+        std::wcerr << L"[ОШИБКА SQL] Не удалось удалить файл.\n";
+    }
+    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+    return false;
+}
+bool ResourceManager::RestoreFromTrash(SQLINTEGER resourceId) {
+    SQLHSTMT hStmt;
+    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+    std::wstring query = L"UPDATE Resources SET isDeleted = 0 WHERE ResourceID = ?";
+    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
+    SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &resourceId, 0, NULL);
+
+    SQLRETURN retcode = SQLExecute(hStmt);
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        SQLLEN rowCount = 0;
+        SQLRowCount(hStmt, &rowCount);
+        if (rowCount > 0) {
+            std::wcout << L"[УСПЕХ] Файл с ID " << resourceId << L" успешно восстановлен из корзины!\n";
+            SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+            return true;
+        }
+        else {
+            std::wcerr << L"[ОШИБКА] Файл с таким ID не найден.\n";
+        }
+    }
+    else {
+        std::wcerr << L"[ОШИБКА SQL] Не удалось восстановить файл.\n";
+    }
+    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+    return false;
+}
