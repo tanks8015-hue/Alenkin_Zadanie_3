@@ -5,6 +5,7 @@
 #include <iostream>
 #include <regex>
 #include <iomanip>
+#include <fstream>
 
 class ResourceManager {
 private:
@@ -24,4 +25,5 @@ public:
     void SearchByName(const std::wstring& keyword);
     bool DeleteToTrash(SQLINTEGER resourceId);
     bool RestoreFromTrash(SQLINTEGER resourceId);
+    void ExportToCSV(const std::wstring& filename);
 };

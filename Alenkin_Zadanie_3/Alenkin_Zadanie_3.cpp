@@ -59,6 +59,7 @@ int main() {
         std::wcout << L"5. Поиск файла по имени (LIKE)\n";
         std::wcout << L"6. Удалить файл в корзину (Soft Delete)\n";
         std::wcout << L"7. Восстановить файл из корзины\n";
+        std::wcout << L"8. Экспорт базы данных в CSV\n";
         std::wcout << L"9. Выход\n";
 
         choice = GetIntInput(L"Выберите действие: ");
@@ -112,6 +113,13 @@ int main() {
         case 7: {
             int resId = GetIntInput(L"Введите ID файла для восстановления: ");
             resManager.RestoreFromTrash(resId);
+            break;
+        }
+        case 8: {
+            std::wstring filename;
+            std::wcout << L"Введите имя файла для сохранения (например, report.csv): ";
+            std::getline(std::wcin, filename);
+            resManager.ExportToCSV(filename);
             break;
         }
         case 9:
