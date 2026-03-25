@@ -20,4 +20,5 @@ public:
     bool AddResource(const std::wstring& name, SQLINTEGER size, SQLINTEGER categoryId, SQLINTEGER ownerId);
     void ShowResourcesPaged();
     void ShowStatistics();
+    void SearchByName(const std::wstring& keyword);
 };

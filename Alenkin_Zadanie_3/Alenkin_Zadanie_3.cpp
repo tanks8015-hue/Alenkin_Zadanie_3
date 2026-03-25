@@ -56,6 +56,7 @@ int main() {
         std::wcout << L"2. Пинг сервера (Проверка связи)\n";
         std::wcout << L"3. Показать список файлов (Постранично)\n";
         std::wcout << L"4. Статистика базы данных (COUNT/SUM)\n";
+        std::wcout << L"5. Поиск файла по имени (LIKE)\n";
         std::wcout << L"9. Выход\n";
 
         choice = GetIntInput(L"Выберите действие: ");
@@ -94,6 +95,13 @@ int main() {
         case 4:
             resManager.ShowStatistics();
             break;
+        case 5: {
+            std::wstring searchWord;
+            std::wcout << L"Введите часть имени для поиска: ";
+            std::getline(std::wcin, searchWord);
+            resManager.SearchByName(searchWord);
+            break;
+        }
         case 9:
             std::wcout << L"Выход из программы...\n";
             break;

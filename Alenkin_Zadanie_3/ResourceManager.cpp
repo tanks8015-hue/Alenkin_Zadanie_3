@@ -163,13 +163,9 @@ bool ResourceManager::AddResource(const std::wstring& name, SQLINTEGER size, SQL
         return false;
     }
 }
-
-// НОВОЕ: Реализация функции подсчета статистики (Группа А - COUNT/SUM)
 void ResourceManager::ShowStatistics() {
     SQLHSTMT hStmt;
     SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
-
-    // SQL-запрос: считаем количество (COUNT) и сумму (SUM) размеров файлов
     std::wstring query = L"SELECT COUNT(ResourceID), SUM(Size) FROM Resources WHERE isDeleted = 0";
     SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
 
@@ -201,6 +197,48 @@ void ResourceManager::ShowStatistics() {
     }
     else {
         std::wcerr << L"[ОШИБКА SQL] Не удалось получить статистику.\n";
+    }
+    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+}
+void ResourceManager::SearchByName(const std::wstring& keyword) {
+    SQLHSTMT hStmt;
+    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+
+    std::wstring query = L"SELECT ResourceID, Name, Size FROM Resources WHERE Name LIKE ? AND isDeleted = 0";
+    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
+    std::wstring mask = L"%" + keyword + L"%";
+    SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, 255, 0, (SQLPOINTER)mask.c_str(), mask.length() * sizeof(wchar_t), NULL);
+
+    SQLRETURN retcode = SQLExecute(hStmt);
+
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        std::wcout << L"\n--- Результаты поиска по запросу '" << keyword << L"' ---\n";
+        std::wcout << std::left << std::setw(5) << L"ID"
+            << std::setw(25) << L"Имя файла"
+            << std::setw(10) << L"Размер" << L"\n";
+        std::wcout << L"----------------------------------------\n";
+
+        SQLINTEGER id, size;
+        SQLWCHAR name[256];
+        SQLLEN cbId, cbName, cbSize;
+
+        SQLBindCol(hStmt, 1, SQL_C_SLONG, &id, sizeof(id), &cbId);
+        SQLBindCol(hStmt, 2, SQL_C_WCHAR, name, sizeof(name), &cbName);
+        SQLBindCol(hStmt, 3, SQL_C_SLONG, &size, sizeof(size), &cbSize);
+
+        int rowCount = 0;
+        while (SQLFetch(hStmt) == SQL_SUCCESS) {
+            rowCount++;
+            std::wcout << std::left << std::setw(5) << id
+                << std::setw(25) << TruncateString(name, 20)
+                << std::setw(10) << size << L"\n";
+        }
+        if (rowCount == 0) {
+            std::wcout << L"[ИНФО] Файлы не найдены.\n";
+        }
+    }
+    else {
+        std::wcerr << L"[ОШИБКА SQL] Ошибка при выполнении поиска.\n";
     }
     SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
 }
