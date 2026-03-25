@@ -24,20 +24,44 @@ bool ResourceManager::IsValidExtension(const std::wstring& name) {
     }
     return true;
 }
+bool ResourceManager::IsDuplicate(const std::wstring& name) {
+    SQLHSTMT hStmt;
+    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+    std::wstring query = L"SELECT COUNT(*) FROM Resources WHERE Name = ?";
+    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
+    SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, 255, 0, (SQLPOINTER)name.c_str(), name.length() * sizeof(wchar_t), NULL);
+
+    SQLRETURN retcode = SQLExecute(hStmt);
+    bool isDup = false;
+
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        SQLINTEGER count = 0;
+        SQLLEN cbCount = 0;
+        SQLBindCol(hStmt, 1, SQL_C_SLONG, &count, sizeof(count), &cbCount);
+        if (SQLFetch(hStmt) == SQL_SUCCESS) {
+            if (count > 0) {
+                isDup = true;
+                std::wcerr << L"[ОШИБКА] Файл с именем '" << name << L"' уже существует в базе (Контроль дубликатов)!\n";
+            }
+        }
+    }
+
+    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+    return isDup;
+}
 
 bool ResourceManager::AddResource(const std::wstring& name, SQLINTEGER size, SQLINTEGER categoryId, SQLINTEGER ownerId) {
     if (!IsValidName(name) || !IsValidExtension(name)) {
         return false;
     }
+    if (IsDuplicate(name)) {
+        return false;
+    }
 
     SQLHSTMT hStmt;
     SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
-
-    // Параметризованный запрос по ТЗ
     std::wstring query = L"INSERT INTO Resources (Name, Size, CategoryID, OwnerID) VALUES (?, ?, ?, ?)";
     SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
-
-    // Биндим параметры
     SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR, SQL_WVARCHAR, 255, 0, (SQLPOINTER)name.c_str(), name.length() * sizeof(wchar_t), NULL);
     SQLBindParameter(hStmt, 2, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &size, 0, NULL);
     SQLBindParameter(hStmt, 3, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &categoryId, 0, NULL);

@@ -5,19 +5,15 @@
 #include "DatabaseManager.h"
 #include "ResourceManager.h"
 #define NOMINMAX
-// Функция для смены цвета текста в консоли (Группа В)
 void SetColor(int text, int background = 0) {
     HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
     SetConsoleTextAttribute(hStdOut, (WORD)((background << 4) | text));
 }
-
-// Жесткая валидация ввода чисел (Критическое требование)
 int GetIntInput(const std::wstring& prompt) {
     int value;
     while (true) {
         std::wcout << prompt;
         if (std::wcin >> value) {
-            // Очищаем буфер от лишних символов (например, от Enter)
             std::wcin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
             return value;
         }
@@ -34,31 +30,26 @@ int GetIntInput(const std::wstring& prompt) {
 
 int main() {
     setlocale(LC_ALL, "Russian");
-    // Устанавливаем кодировку консоли для корректного ввода/вывода кириллицы
     SetConsoleCP(1251);
     SetConsoleOutputCP(1251);
 
     DatabaseManager db;
-
-    // Твоя рабочая строка подключения!
     std::wstring connStr = L"Driver={ODBC Driver 17 for SQL Server};Server=DESKTOP-PKN6175\\SQLEXPRESS;Database=ByteKeeperDB;Trusted_Connection=yes;";
 
-    SetColor(10); // Зеленый
+    SetColor(10);
     std::wcout << L"=== Подключение к базе данных ===\n";
     SetColor(7);
 
     if (!db.Connect(connStr)) {
         std::wcout << L"Нажмите Enter для выхода...\n";
         std::wcin.get();
-        return 1; // Выходим, если БД недоступна
+        return 1;
     }
 
     ResourceManager resManager(db.GetConnectionHandle());
     int choice = 0;
-
-    // Главное меню программы
     while (choice != 9) {
-        SetColor(11); // Голубой
+        SetColor(11);
         std::wcout << L"\n--- ByteKeeper: Управление активами ---\n";
         SetColor(7);
         std::wcout << L"1. Добавить новый файл\n";
