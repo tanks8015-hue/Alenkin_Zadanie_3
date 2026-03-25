@@ -60,18 +60,38 @@ std::wstring ResourceManager::TruncateString(const std::wstring& str, size_t max
     return str;
 }
 
+// НОВОЕ: Добавлено интерактивное меню сортировки перед выводом страниц
 void ResourceManager::ShowResourcesPaged() {
+    std::wcout << L"\n--- Выберите сортировку списка ---\n";
+    std::wcout << L"1. По ID (сначала старые)\n";
+    std::wcout << L"2. По имени файла (А-Я)\n";
+    std::wcout << L"3. По размеру (сначала большие)\n";
+    std::wcout << L"Ваш выбор: ";
+
+    wchar_t sortChoice;
+    std::wcin >> sortChoice;
+    std::wcin.ignore((std::numeric_limits<std::streamsize>::max)(), L'\n');
+
+    // Безопасное формирование ORDER BY
+    std::wstring orderBy = L"ORDER BY r.ResourceID ASC ";
+    if (sortChoice == L'2') orderBy = L"ORDER BY r.Name ASC ";
+    else if (sortChoice == L'3') orderBy = L"ORDER BY r.Size DESC ";
+
     int offset = 0;
     int fetchSize = 10;
     bool keepPaging = true;
     while (keepPaging) {
         SQLHSTMT hStmt;
         SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+
+        // Подклеиваем нашу безопасную сортировку в запрос
         std::wstring query =
             L"SELECT r.ResourceID, r.Name, r.Size, u.UserName "
             L"FROM Resources r "
             L"JOIN Users u ON r.OwnerID = u.UserID "
-            L"WHERE r.isDeleted = 0 ORDER BY r.ResourceID OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+            L"WHERE r.isDeleted = 0 " + orderBy +
+            L"OFFSET ? ROWS FETCH NEXT ? ROWS ONLY";
+
         SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
         SQLBindParameter(hStmt, 1, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &offset, 0, NULL);
         SQLBindParameter(hStmt, 2, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, &fetchSize, 0, NULL);
@@ -230,49 +250,34 @@ bool ResourceManager::RestoreFromTrash(SQLINTEGER resourceId) {
     SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
     return false;
 }
+
 void ResourceManager::ExportToCSV(const std::wstring& filename) {
     SQLHSTMT hStmt;
     SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
-    std::wstring query =
-        L"SELECT r.ResourceID, r.Name, r.Size, u.UserName "
-        L"FROM Resources r JOIN Users u ON r.OwnerID = u.UserID "
-        L"WHERE r.isDeleted = 0";
-
+    std::wstring query = L"SELECT r.ResourceID, r.Name, r.Size, u.UserName FROM Resources r JOIN Users u ON r.OwnerID = u.UserID WHERE r.isDeleted = 0";
     SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
     SQLRETURN retcode = SQLExecute(hStmt);
-
     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
         std::wofstream file(filename);
-        file.imbue(std::locale("")); 
-
+        file.imbue(std::locale(""));
         if (!file.is_open()) {
             std::wcerr << L"[ОШИБКА] Не удалось создать файл: " << filename << L"\n";
-            SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
-            return;
+            SQLFreeHandle(SQL_HANDLE_STMT, hStmt); return;
         }
         file << L"ID;Имя файла;Размер(Байт);Владелец\n";
-
-        SQLINTEGER id, size;
-        SQLWCHAR name[256], owner[256];
-        SQLLEN cbId, cbName, cbSize, cbOwner;
-
+        SQLINTEGER id, size; SQLWCHAR name[256], owner[256]; SQLLEN cbId, cbName, cbSize, cbOwner;
         SQLBindCol(hStmt, 1, SQL_C_SLONG, &id, sizeof(id), &cbId);
         SQLBindCol(hStmt, 2, SQL_C_WCHAR, name, sizeof(name), &cbName);
         SQLBindCol(hStmt, 3, SQL_C_SLONG, &size, sizeof(size), &cbSize);
         SQLBindCol(hStmt, 4, SQL_C_WCHAR, owner, sizeof(owner), &cbOwner);
-
         int count = 0;
         while (SQLFetch(hStmt) == SQL_SUCCESS) {
-            file << id << L";" << name << L";" << size << L";" << owner << L"\n";
-            count++;
+            file << id << L";" << name << L";" << size << L";" << owner << L"\n"; count++;
         }
-
         std::wcout << L"[УСПЕХ] Экспортировано " << count << L" записей в файл '" << filename << L"'\n";
         file.close();
-        LogAction(L"Произведен экспорт базы данных в CSV файл: " + filename); // И записываем это в лог!
+        LogAction(L"Произведен экспорт базы данных в CSV файл: " + filename);
     }
-    else {
-        std::wcerr << L"[ОШИБКА SQL] Не удалось выгрузить данные для экспорта.\n";
-    }
+    else { std::wcerr << L"[ОШИБКА SQL] Не удалось выгрузить данные для экспорта.\n"; }
     SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
 }
