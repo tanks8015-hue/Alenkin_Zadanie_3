@@ -3,14 +3,15 @@
 #include <sqlext.h>
 #include <string>
 #include <iostream>
-#include <regex> // Нужно для проверки спецсимволов
+#include <regex>
 
 class ResourceManager {
 private:
     SQLHDBC hDbc;
 
-    // Вот эта строка потерялась! Объявляем функцию валидации имени
+    // Объявляем проверки здесь, чтобы студия их видела
     bool IsValidName(const std::wstring& name);
+    bool IsValidExtension(const std::wstring& name);
 
 public:
     ResourceManager(SQLHDBC connectionHandle);
