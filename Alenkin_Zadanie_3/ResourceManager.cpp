@@ -48,12 +48,14 @@ bool ResourceManager::IsDuplicate(const std::wstring& name) {
     SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
     return isDup;
 }
+
 std::wstring ResourceManager::TruncateString(const std::wstring& str, size_t maxLength) {
     if (str.length() > maxLength) {
         return str.substr(0, maxLength) + L"...";
     }
     return str;
 }
+
 void ResourceManager::ShowResourcesPaged() {
     int offset = 0;
     int fetchSize = 10;
@@ -160,4 +162,45 @@ bool ResourceManager::AddResource(const std::wstring& name, SQLINTEGER size, SQL
         SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
         return false;
     }
+}
+
+// НОВОЕ: Реализация функции подсчета статистики (Группа А - COUNT/SUM)
+void ResourceManager::ShowStatistics() {
+    SQLHSTMT hStmt;
+    SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
+
+    // SQL-запрос: считаем количество (COUNT) и сумму (SUM) размеров файлов
+    std::wstring query = L"SELECT COUNT(ResourceID), SUM(Size) FROM Resources WHERE isDeleted = 0";
+    SQLPrepareW(hStmt, (SQLWCHAR*)query.c_str(), SQL_NTS);
+
+    SQLRETURN retcode = SQLExecute(hStmt);
+
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        SQLINTEGER count = 0;
+        SQLBIGINT totalSize = 0;
+        SQLLEN cbCount, cbSize;
+
+        // Биндим результаты колонок к переменным
+        SQLBindCol(hStmt, 1, SQL_C_SLONG, &count, sizeof(count), &cbCount);
+        SQLBindCol(hStmt, 2, SQL_C_SBIGINT, &totalSize, sizeof(totalSize), &cbSize);
+
+        if (SQLFetch(hStmt) == SQL_SUCCESS) {
+            std::wcout << L"\n==============================\n";
+            std::wcout << L"   СТАТИСТИКА БАЗЫ ДАННЫХ\n";
+            std::wcout << L"==============================\n";
+            std::wcout << L"Всего файлов: " << count << L"\n";
+
+            if (cbSize != SQL_NULL_DATA) {
+                std::wcout << L"Общий объем:  " << totalSize << L" байт\n";
+            }
+            else {
+                std::wcout << L"Общий объем:  0 байт\n";
+            }
+            std::wcout << L"==============================\n";
+        }
+    }
+    else {
+        std::wcerr << L"[ОШИБКА SQL] Не удалось получить статистику.\n";
+    }
+    SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
 }

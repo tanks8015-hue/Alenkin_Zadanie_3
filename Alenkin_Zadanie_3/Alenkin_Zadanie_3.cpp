@@ -55,6 +55,7 @@ int main() {
         std::wcout << L"1. Добавить новый файл\n";
         std::wcout << L"2. Пинг сервера (Проверка связи)\n";
         std::wcout << L"3. Показать список файлов (Постранично)\n";
+        std::wcout << L"4. Статистика базы данных (COUNT/SUM)\n";
         std::wcout << L"9. Выход\n";
 
         choice = GetIntInput(L"Выберите действие: ");
@@ -89,6 +90,9 @@ int main() {
             break;
         case 3:
             resManager.ShowResourcesPaged(); 
+            break;
+        case 4:
+            resManager.ShowStatistics();
             break;
         case 9:
             std::wcout << L"Выход из программы...\n";

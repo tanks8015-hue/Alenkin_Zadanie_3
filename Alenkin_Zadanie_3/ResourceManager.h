@@ -19,4 +19,5 @@ public:
     ResourceManager(SQLHDBC connectionHandle);
     bool AddResource(const std::wstring& name, SQLINTEGER size, SQLINTEGER categoryId, SQLINTEGER ownerId);
     void ShowResourcesPaged();
+    void ShowStatistics();
 };
